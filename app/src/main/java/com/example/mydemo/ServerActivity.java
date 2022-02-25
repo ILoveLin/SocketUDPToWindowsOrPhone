@@ -176,7 +176,16 @@ public class ServerActivity extends AppCompatActivity {
                 byte[] receiveData = new byte[1024];
                 DatagramPacket mReceivePacket = new DatagramPacket(receiveData, receiveData.length);
                 try {
-                    mReceiveSocket = new DatagramSocket(RECEIVE_PORT);
+                    //这种写法容易多次进入退出这个界面,容易端口绑定异常:java.net.BindException: Address already in use
+                    // mReceiveSocket = new DatagramSocket(RECEIVE_PORT);
+                    //所以使用此方法,设置端口可重复使用,在绑定端口
+                    if (mReceiveSocket == null) {
+                        mReceiveSocket = new DatagramSocket(null);
+                        //设置端口可重复使用
+                        mReceiveSocket.setReuseAddress(true);
+                        //在绑定端口
+                        mReceiveSocket.bind(new InetSocketAddress(RECEIVE_PORT));
+                    }
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
