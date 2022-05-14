@@ -1,5 +1,6 @@
 package com.example.mydemo.utils;
 
+import android.content.Context;
 import android.util.Log;
 
 import java.math.BigInteger;
@@ -16,6 +17,125 @@ import java.util.Random;
  * desc：各种进制计算的工具类
  */
 public class CalculateUtils {
+    private static String sendCommandString;
+
+    public static byte[] getSendByteData(Context mContext, String bean, String Received_Type,
+                                         String Received_ID, String CMD) {
+
+//      BroadCastDataBean bean = new BroadCastDataBean();
+//      bean.setBroadcaster("szcme");                              //设备名字
+//      bean.setRamdom(CalculateUtils.getCurrentTimeString());
+//      广播发起随机时间戳:20220127104645
+        //不转换的时候最后在CalculateUtils.hexString2Bytes(sendCommandString);回返回null,因为我那边模了不是偶数就会返回null
+
+        LogUtils.e("SocketManage回调==哇哈哈==getSendByteData====Received_Type==" + Received_Type);
+        if ("9".equals(Received_Type)) {
+            Received_Type = "09";
+        }
+        if ("8".equals(Received_Type)) {
+            Received_Type = "08";
+        }
+        if ("7".equals(Received_Type)) {
+            Received_Type = "07";
+        }
+        String mSend_IDBy32 = MD5ChangeUtil.Md5_32(DeviceIdUtil.getDeviceId(mContext));
+        String mData = CalculateUtils.str2HexStr(bean);                   //data  json字符串转16进制
+        String mHead = "AAC5";                                             //帧头    ---2字节
+        String mVer = "01";                                                //版本号  ---1字节
+        String mLength = CalculateUtils.getLength(mData);                  //长度   ---2字节   40加data的长度 字符串的长度转成hex进制
+        String mRandom = CalculateUtils.getRandomHexString(2);         // //随机数  ---1字节
+        String mCMD_ID = "FF";                                              //命令ID   ---2字节-暂时规定,主动发起方为FF 接收方为随机值,PS--移动端目前交互写死值=FF
+        String mSend_Type = "A1";                                           //发送方设备类型。--1字节-Android=A1  FF为所有设备
+        String mSend_ID = mSend_IDBy32.toUpperCase();                       //发送方设备唯一标识。   --16字节
+        String mReceived_Type = Received_Type;                              //接收方设备类型。   --FF是是所有设备
+        String mReceived_ID = Received_ID;                                  //接收方设备唯一标识。   --16字节--目前暂时给32个0,模拟后台给的数据
+        String mCMD = CMD;                                                  //UDP广播   --一个字节
+        // 校验和，0xAA 依次与“Length、Random、CMD_ID、Send_Type、Send_ID、Received_Type、Received_ID、CMD、Data” 异或运算后的结果
+        String CSString = "AA" + mLength + mRandom + mCMD_ID + mSend_Type + mSend_ID + mReceived_Type + mReceived_ID + mCMD + mData;
+        String mCheck_Sum = CalculateUtils.get16HexXORData(CSString).toUpperCase();
+
+        sendCommandString = mHead + mVer + mLength + mRandom + mCMD_ID + mSend_Type + mSend_ID + mReceived_Type +
+                mReceived_ID + mCMD + mData + mCheck_Sum + "DD";
+        LogUtils.e("UDP==命令===mData===" + mData);
+        LogUtils.e("UDP==命令===mLength===" + mLength);
+        LogUtils.e("UDP==命令===mRandom===" + mRandom);
+        LogUtils.e("UDP==命令===mSend_ID===" + mSend_IDBy32);
+        LogUtils.e("UDP==命令===mReceived_Type===" + mReceived_Type);
+        LogUtils.e("UDP==命令===mReceived_ID===" + mReceived_ID);
+        LogUtils.e("UDP==命令===异或的CSString===" + CSString);
+        LogUtils.e("UDP==命令===异或的结果===" + mCheck_Sum);
+
+        LogUtils.e("UDP==命令===最后发送的String===" + sendCommandString.length());
+        LogUtils.e("UDP==命令===最后发送的String===异或的CSString==" + mCheck_Sum);
+        LogUtils.e("UDP==命令===最后发送的String===" + sendCommandString);
+        LogUtils.e("UDP==命令===最后发送的String===============================");
+        byte[] bytes = CalculateUtils.hexString2Bytes(mData);
+//        byte[] bytes = CalculateUtils.hexString2Bytes(sendCommandString);
+        //AAC5 01 0059 EE22 FF A1 f9432b11b93e8bb4ae34539b7472c20e FF 00000000000000000000000000000000
+        //FD 7B2262726F6164636173746572223A22737A636D65222C2272616D646F6D223A223230323230313237313132373535227D
+        // F8 DD
+        return bytes;
+    }
+
+    /**
+     * 获取协议Length   的长度
+     *
+     * @return
+     */
+    public static String getLength(String data) {
+//        40(固定长度)加变化data的长度然后-->字符串的长度转成hex进制
+        LogUtils.e("SocketUtils===1111==点对点====data==" + data);   //7B22636F6D6546726F6D223A22222C2268656C6C6F5063223A22227D
+        LogUtils.e("SocketUtils===1111==点对点====getLength==" + data.length());
+        byte[] bytes = hexString2Bytes(data);
+
+        int i = bytes.length + 40;
+        //10进制转换成16进制  --保留 4位，不足补0
+        String s = hex10To16Result4(i);
+        LogUtils.e("SocketUtils===1111==点对点====getLength转换后==" + s.length());
+
+        return s.toUpperCase();
+    }
+
+
+    /**
+     * 16进制字符串--转--字节数组-----UDP---发包
+     */
+    public static byte[] hexString2Bytes(String data) {
+        LogUtils.e("SocketUtils===2222==点对点====hex.length()==" + data.length());
+
+        if ((data == null) || (data.equals(""))) {
+            LogUtils.e("SocketUtils===2222==点对点====AAAA==" + data.length());
+
+            return null;
+        } else if (data.length() % 2 != 0) {
+            LogUtils.e("SocketUtils===2222==点对点====BBBB==" + data.length());
+            LogUtils.e("SocketUtils===2222==点对点====BBBB==" + data);
+
+
+            return null;
+        } else {
+            data = data.toUpperCase();
+            int len = data.length() / 2;
+            byte[] b = new byte[len];
+            char[] charDate = data.toCharArray();
+            for (int i = 0; i < len; i++) {
+                int p = 2 * i;
+                b[i] = (byte) (charToByte(charDate[p]) << 4 | charToByte(charDate[p + 1]));
+
+            }
+
+            return b;
+        }
+
+    }
+
+    /**
+     * 10进制转换成16进制  --保留 4位，不足补0
+     */
+    public static String hex10To16Result4(int intValue) {
+
+        return String.format("%04x", intValue);
+    }
 
 
     /**
@@ -61,6 +181,7 @@ public class CalculateUtils {
 
     /**
      * 字符串转换成为16进制(无需Unicode编码)
+     *
      * @param str
      * @return
      */
@@ -82,6 +203,7 @@ public class CalculateUtils {
 
     /**
      * 16进制直接转换成为字符串(无需Unicode解码)
+     *
      * @param hexStr
      * @return
      */
@@ -114,6 +236,8 @@ public class CalculateUtils {
      */
 //    校验和，0xAA 依次与“Length、Random、CMD_ID、Send_Type、Send_ID、Received_Type、Received_ID、CMD、Data” 异或运算后的结果
     public static String get16HexXORData(String para) {
+        LogUtils.e("UDP==命令===获取校验和方法==para=" + para);
+        LogUtils.e("UDP==命令===获取校验和方法==length=" + para.length());
         int length = para.length() / 2;
         String[] dateArr = new String[length];
 
@@ -124,8 +248,20 @@ public class CalculateUtils {
         for (int i = 0; i < dateArr.length; i++) {
             code = xor(code, dateArr[i]);
         }
+        Log.e("code", code);
+        String result =code;
+        if (result.length()==1){
+            LogUtils.e("UDP==命令===最后发送的String===异或的CSString==长度=1==错误数据"+code);
 
-        return code;
+            result = "0" + code;
+            LogUtils.e("UDP==命令===最后发送的String===异或的CSString==长度=1==修正数据"+result);
+
+        }else {
+            result =code;
+            LogUtils.e("UDP==命令===最后发送的String===异或的CSString==长度=2==计算数据"+code);
+
+        }
+        return result;
     }
 
     private static String xor(String strHex_X, String strHex_Y) {
@@ -153,7 +289,27 @@ public class CalculateUtils {
                 result += "1";
             }
         }
-        Log.e("code", result);
+//        byte[] bytes = result.getBytes();
+//        //另一种转换，可以针对负数与正数的byte都可以以完整的单字节输出
+//        byte positiveByte = 2;
+//        String substring = Integer.toHexString((positiveByte & 0x000000ff) | 0xffffff00)
+//                .substring(6);
+//
+//
+//        LogUtils.e(substring.toUpperCase());//02
+//
+//        //        Log.e("code", result);
+//
+//
+//        substring.toUpperCase();
+
+//        String string = Integer.toHexString(Integer.parseInt(result, 2));
+//        Log.e("UDP==命令===最后发送的String===string===", string);//aa
+//
+//        String s = numToHex16(Integer.parseInt(string));
+//        Log.e("UDP==命令===最后发送的String===s===", s);
+
+//        return s;
         return Integer.toHexString(Integer.parseInt(result, 2));
     }
 
@@ -208,30 +364,30 @@ public class CalculateUtils {
     }
 
 
-    /**
-     * 16进制字符串--转--字节数组-----UDP---发包
-     */
-    public static byte[] hexString2Bytes(String hex) {
-
-        if ((hex == null) || (hex.equals(""))) {
-            return null;
-        } else if (hex.length() % 2 != 0) {
-            return null;
-        } else {
-            hex = hex.toUpperCase();
-            int len = hex.length() / 2;
-            byte[] b = new byte[len];
-            char[] charDate = hex.toCharArray();
-            for (int i = 0; i < len; i++) {
-                int p = 2 * i;
-                b[i] = (byte) (charToByte(charDate[p]) << 4 | charToByte(charDate[p + 1]));
-
-            }
-
-            return b;
-        }
-
-    }
+//    /**
+//     * 16进制字符串--转--字节数组-----UDP---发包
+//     */
+//    public static byte[] hexString2Bytes(String hex) {
+//
+//        if ((hex == null) || (hex.equals(""))) {
+//            return null;
+//        } else if (hex.length() % 2 != 0) {
+//            return null;
+//        } else {
+//            hex = hex.toUpperCase();
+//            int len = hex.length() / 2;
+//            byte[] b = new byte[len];
+//            char[] charDate = hex.toCharArray();
+//            for (int i = 0; i < len; i++) {
+//                int p = 2 * i;
+//                b[i] = (byte) (charToByte(charDate[p]) << 4 | charToByte(charDate[p + 1]));
+//
+//            }
+//
+//            return b;
+//        }
+//
+//    }
 
     /**
      * 字符转换为字节
